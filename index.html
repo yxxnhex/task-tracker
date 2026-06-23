@@ -471,11 +471,19 @@ async function loadFromSupabase() {
     const rows = await res.json();
     if (rows.length > 0) {
       const row = rows[0];
-      tasks = row.tasks || [];
-      projects = row.projects || [];
-      if (row.memo) localStorage.setItem(MEMO_KEY, row.memo);
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks));
-      localStorage.setItem(PROJECTS_KEY, JSON.stringify(projects));
+      const sbTasks = row.tasks || [];
+      const sbProjects = row.projects || [];
+      if (sbTasks.length > 0) {
+        // Supabase에 데이터 있음 → 로컬에 덮어쓰기
+        tasks = sbTasks;
+        projects = sbProjects;
+        if (row.memo) localStorage.setItem(MEMO_KEY, row.memo);
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks));
+        localStorage.setItem(PROJECTS_KEY, JSON.stringify(projects));
+      } else if (tasks.length > 0) {
+        // Supabase 비어 있고 로컬에 데이터 있음 → 로컬 데이터를 Supabase로 올리기
+        syncToSupabase();
+      }
     }
     setSyncStatus('✓ 동기화됨', '#22c55e');
     setTimeout(() => setSyncStatus('', ''), 2500);
