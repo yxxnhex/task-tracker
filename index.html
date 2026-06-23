@@ -1,0 +1,843 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>작업 트래커</title>
+<style>
+  :root { color-scheme: light; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f8f8f7; color: #1a1a1a; font-size: 14px; }
+
+  /* ── Header ── */
+  .header { background: #fff; border-bottom: 1px solid #e5e5e5; padding: 10px 20px; position: sticky; top: 0; z-index: 10; }
+  .controls { display: flex; gap: 8px; align-items: center; }
+  .controls-left { display: flex; gap: 8px; align-items: center; flex: 1; min-width: 0; }
+
+  /* Custom select wrapper — fixes icon + spacing */
+  .select-wrap { position: relative; flex-shrink: 0; }
+  .select-wrap select {
+    appearance: none; -webkit-appearance: none;
+    padding: 0 30px 0 10px; height: 32px; border: 1px solid #ddd;
+    border-radius: 6px; font-size: 13px; background: #fff; outline: none;
+    cursor: pointer; color: #1a1a1a; width: 130px;
+  }
+  .select-wrap select:focus { border-color: #888; }
+  .select-arrow {
+    position: absolute; right: 9px; top: 50%; transform: translateY(-50%);
+    pointer-events: none; color: #aaa;
+  }
+  .search-input {
+    flex: 1; min-width: 100px; height: 32px;
+    padding: 0 10px; border: 1px solid #ddd; border-radius: 6px;
+    font-size: 13px; background: #fff; outline: none;
+  }
+  .search-input:focus { border-color: #888; }
+  .btn { padding: 0 14px; border-radius: 6px; border: none; font-size: 13px; cursor: pointer; font-weight: 500; height: 32px; white-space: nowrap; }
+  .btn-primary { background: #1a1a1a; color: #fff; }
+  .btn-primary:hover { background: #333; }
+  .btn-danger { background: #fff; color: #dc2626; border: 1px solid #fca5a5; }
+  .btn-danger:hover { background: #fef2f2; }
+  .btn-ghost { background: #fff; color: #555; border: 1px solid #e0e0e0; }
+  .btn-ghost:hover { background: #f5f5f5; }
+
+  /* ── Tabs with count ── */
+  .tab-bar { display: flex; padding: 0 12px 0 20px; background: #fff; border-bottom: 1px solid #e5e5e5; overflow-x: auto; position: sticky; top: 52px; z-index: 9; align-items: center; }
+  .tab-right-actions { margin-left: auto; display: flex; gap: 4px; align-items: center; flex-shrink: 0; padding-left: 8px; }
+  .tab-right-actions .btn { display: inline-flex; align-items: center; justify-content: center; }
+  .tab { padding: 9px 12px; font-size: 13px; cursor: pointer; border-bottom: 2px solid transparent; color: #999; font-weight: 500; white-space: nowrap; flex-shrink: 0; display: flex; align-items: center; gap: 5px; }
+  .tab.active { color: #1a1a1a; border-bottom-color: #1a1a1a; }
+  .tab-cnt { font-size: 11px; background: #f0f0f0; color: #888; padding: 1px 6px; border-radius: 10px; font-weight: 600; }
+  .tab.active .tab-cnt { background: #1a1a1a; color: #fff; }
+
+  /* ── List ── */
+  .content { padding: 16px 20px; }
+  .group-block { margin-bottom: 22px; }
+  .group-header { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+  .group-dot { width: 8px; height: 8px; border-radius: 50%; background: #d1d5db; flex-shrink: 0; }
+  .group-title { font-size: 13px; font-weight: 600; color: #444; }
+  .group-count { font-size: 12px; color: #bbb; }
+
+  .task-card {
+    background: #fff; border: 1px solid #e8e8e8; border-radius: 8px;
+    padding: 11px 14px; margin-bottom: 5px;
+    display: flex; align-items: flex-start; gap: 10px;
+    cursor: pointer; transition: border-color 0.12s, box-shadow 0.12s;
+  }
+  .task-card:hover { border-color: #c0c0c0; box-shadow: 0 1px 4px rgba(0,0,0,0.05); }
+  .task-card.done { opacity: 0.5; }
+  .task-card.done .task-title { text-decoration: line-through; color: #999; }
+
+  .card-status-dot { flex-shrink: 0; margin-top: 3px; }
+  .sdot { width: 10px; height: 10px; border-radius: 50%; cursor: pointer; transition: transform 0.1s; }
+  .sdot:hover { transform: scale(1.25); }
+  .sdot.planned    { background: #9ca3af; }
+  .sdot.inprogress { background: #fbbf24; }
+  .sdot.review     { background: #c084fc; }
+  .sdot.done       { background: #4ade80; }
+
+  .task-body { flex: 1; min-width: 0; }
+  .task-title { font-size: 14px; font-weight: 500; margin-bottom: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .task-meta { font-size: 12px; color: #aaa; display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+  .task-date-inline { color: #bbb; }
+  /* weekly compact row */
+  .wi-title-row { display: flex; align-items: baseline; gap: 6px; min-width: 0; }
+  .wi-title { font-size: 13px; color: #222; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex-shrink: 1; min-width: 0; }
+  .wi-date { font-size: 12px; color: #bbb; white-space: nowrap; flex-shrink: 0; }
+  .wi-proj { font-size: 12px; color: #c0c0c0; margin-left: auto; white-space: nowrap; flex-shrink: 0; padding-left: 10px; }
+  .status-pill { padding: 1px 7px; border-radius: 20px; font-size: 11px; font-weight: 600; }
+  .status-pill.planned    { background: #f3f4f6; color: #6b7280; }
+  .status-pill.inprogress { background: #fef3c7; color: #d97706; }
+  .status-pill.review     { background: #f3e8ff; color: #9333ea; }
+  .status-pill.done       { background: #dcfce7; color: #16a34a; }
+
+  /* ── Detail panel ── */
+  .detail-backdrop { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.18); z-index: 50; }
+  .detail-backdrop.open { display: block; }
+  .detail-panel {
+    position: fixed; top: 0; right: -460px; width: 440px; max-width: 100vw;
+    height: 100%; background: #fff; box-shadow: -3px 0 20px rgba(0,0,0,0.1);
+    z-index: 51; display: flex; flex-direction: column;
+    transition: right 0.22s cubic-bezier(0.4,0,0.2,1);
+  }
+  .detail-panel.open { right: 0; }
+  .detail-topbar {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 18px 10px; border-bottom: 1px solid #f0f0f0; flex-shrink: 0;
+  }
+  .detail-topbar span { font-size: 13px; font-weight: 600; color: #555; }
+  .detail-close { background: none; border: none; font-size: 18px; cursor: pointer; color: #aaa; padding: 2px 6px; border-radius: 4px; }
+  .detail-close:hover { background: #f0f0f0; color: #333; }
+  .detail-scroll { flex: 1; overflow-y: auto; padding: 18px; }
+
+  /* field rows */
+  .field-row { margin-bottom: 14px; }
+  .field-label-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 5px; }
+  .field-label { font-size: 11px; font-weight: 600; color: #aaa; text-transform: uppercase; letter-spacing: 0.04em; }
+  .date-clear-btn {
+    font-size: 10px; color: #ccc; background: none; border: none;
+    cursor: pointer; padding: 1px 5px; border-radius: 3px; line-height: 1.4;
+  }
+  .date-clear-btn:hover { color: #888; background: #f0f0f0; }
+  .auto-badge { font-size: 10px; background: #dcfce7; color: #16a34a; padding: 1px 5px; border-radius: 3px; margin-left: 4px; font-weight: 500; }
+
+  .field-input {
+    width: 100%; padding: 8px 10px; border: 1.5px solid transparent;
+    border-radius: 7px; font-size: 14px; font-family: inherit;
+    background: #f8f8f7; outline: none; color: #1a1a1a;
+    transition: border-color 0.15s, background 0.15s;
+  }
+  .field-input:hover { background: #f0f0ef; }
+  .field-input:focus { border-color: #888; background: #fff; }
+  .field-title { font-size: 17px; font-weight: 600; line-height: 1.3; resize: none; overflow: hidden; min-height: 36px; }
+
+  .field-select {
+    width: 100%; padding: 7px 10px; border: 1.5px solid transparent;
+    border-radius: 7px; font-size: 13px; font-family: inherit;
+    background: #f8f8f7; outline: none; cursor: pointer; color: #1a1a1a;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23aaa' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat; background-position: right 10px center; background-size: 12px; padding-right: 28px;
+    transition: border-color 0.15s, background-color 0.15s;
+  }
+  .field-select:hover { background-color: #f0f0ef; }
+  .field-select:focus { border-color: #888; background-color: #fff; }
+
+  .field-date {
+    width: 100%; padding: 7px 10px; border: 1.5px solid transparent;
+    border-radius: 7px; font-size: 13px; font-family: inherit;
+    background: #f8f8f7; outline: none; color: #1a1a1a;
+    transition: border-color 0.15s, background 0.15s;
+  }
+  .field-date:hover { background: #f0f0ef; }
+  .field-date:focus { border-color: #888; background: #fff; }
+
+  /* Project autocomplete */
+  .project-wrap { position: relative; }
+  .proj-dropdown {
+    position: absolute; top: calc(100% + 2px); left: 0; right: 0;
+    background: #fff; border: 1px solid #e0e0e0; border-radius: 7px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1); z-index: 10;
+    max-height: 160px; overflow-y: auto; display: none;
+  }
+  .proj-dropdown.show { display: block; }
+  .proj-option { padding: 8px 12px; font-size: 13px; cursor: pointer; }
+  .proj-option:hover { background: #f5f5f5; }
+
+  /* Memo editor */
+  .memo-wrap { border-radius: 7px; }
+  .memo-toolbar {
+    display: flex; gap: 2px; padding: 5px 8px; flex-wrap: wrap;
+    background: #f4f4f4; border: 1.5px solid transparent;
+    border-radius: 7px 7px 0 0; border-bottom: 1px solid #e8e8e8;
+  }
+  .memo-wrap:focus-within .memo-toolbar { border-color: #888; background: #ececec; border-bottom-color: #e0e0e0; }
+  .memo-btn {
+    padding: 4px 6px; border: none; background: none; cursor: pointer;
+    border-radius: 4px; color: #555; line-height: 1; display: flex; align-items: center;
+  }
+  .memo-btn:hover { background: #e0e0e0; }
+  .memo-btn svg { display: block; }
+  .memo-btn-text { font-size: 13px; font-family: inherit; padding: 3px 7px; }
+  .memo-sep { width: 1px; background: #ddd; margin: 2px 3px; flex-shrink: 0; }
+  .memo-editor {
+    width: 100%; min-height: 140px; max-height: 340px; overflow-y: auto;
+    padding: 10px 14px; font-size: 13px; line-height: 1.75;
+    border: 1.5px solid transparent; border-top: none;
+    border-radius: 0 0 7px 7px; background: #f8f8f7; outline: none;
+    font-family: inherit; color: #1a1a1a;
+    transition: border-color 0.15s, background 0.15s;
+  }
+  .memo-editor:hover { background: #f0f0ef; }
+  .memo-wrap:focus-within .memo-editor { background: #fff; border-color: #888; border-top: none; }
+  .memo-editor ul, .memo-editor ol { padding-left: 20px; margin: 4px 0; }
+  .memo-editor li { margin: 2px 0; }
+  .memo-editor:empty:before { content: attr(data-placeholder); color: #bbb; pointer-events: none; }
+
+  /* Footer — delete LEFT, save RIGHT */
+  .detail-footer {
+    padding: 12px 18px; border-top: 1px solid #f0f0f0; flex-shrink: 0;
+    display: flex; gap: 8px;
+  }
+
+  .empty { text-align: center; padding: 48px 20px; color: #bbb; font-size: 13px; }
+
+  /* Weekly */
+  .weekly-section { background: #fff; border: 1px solid #e8e8e8; border-radius: 8px; padding: 16px; margin-bottom: 14px; }
+  .weekly-section h3 { font-size: 13px; font-weight: 600; margin-bottom: 12px; color: #444; display: flex; align-items: center; gap: 6px; }
+  .weekly-section h3 .wk-count { font-size: 12px; font-weight: 400; color: #aaa; }
+  .weekly-item { padding: 6px 0; border-bottom: 1px solid #f5f5f5; display: flex; gap: 8px; align-items: center; cursor: pointer; }
+  .weekly-item:last-child { border-bottom: none; }
+  .weekly-item:hover .wi-title { color: #555; }
+  .wi-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .wi-body { flex: 1; min-width: 0; display: flex; align-items: baseline; gap: 6px; }
+  .wi-output { font-size: 12px; color: #777; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .empty-weekly { font-size: 13px; color: #bbb; padding: 8px 0; }
+
+  /* ── Memo tab ── */
+  #memoView { display: none; height: calc(100vh - 104px); flex-direction: column; }
+  #memoView.active { display: flex; }
+  .memo-topbar {
+    display: flex; align-items: center; gap: 4px;
+    padding: 7px 16px; background: #fafafa; border-bottom: 1px solid #eee;
+    flex-shrink: 0; flex-wrap: wrap;
+  }
+  .memo-topbar-spacer { flex: 1; }
+  .memo-save-indicator { font-size: 12px; color: #aaa; }
+  .memo-full-editor {
+    flex: 1; padding: 20px 24px; font-size: 14px; line-height: 1.8;
+    outline: none; font-family: inherit; color: #1a1a1a;
+    overflow-y: auto; background: #fff;
+  }
+  .memo-full-editor ul, .memo-full-editor ol { padding-left: 22px; margin: 4px 0; }
+  .memo-full-editor li { margin: 2px 0; }
+  .memo-full-editor:empty:before { content: '자유롭게 메모하세요...'; color: #ccc; pointer-events: none; }
+
+  /* ── Export/Import ── */
+  .sync-bar {
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 20px; background: #fafafa; border-bottom: 1px solid #eee;
+    flex-shrink: 0; font-size: 12px; color: #888;
+  }
+  .sync-bar span { margin-right: 4px; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="controls">
+    <div class="controls-left">
+      <div class="select-wrap">
+        <select id="projectFilter"><option value="">전체 프로젝트</option></select>
+        <svg class="select-arrow" width="10" height="6" viewBox="0 0 10 6" fill="none">
+          <path d="M1 1l4 4 4-4" stroke="#aaa" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </div>
+      <input class="search-input" id="searchInput" type="text" placeholder="검색...">
+    </div>
+    <button class="btn btn-primary" onclick="openAddModal()">+ 작업 추가</button>
+  </div>
+</div>
+
+<div class="tab-bar">
+  <div class="tab active" id="tabInprogress" onclick="switchTab('inprogress')">진행중 <span class="tab-cnt" id="cntInprogress">0</span></div>
+  <div class="tab" id="tabPlanned"    onclick="switchTab('planned')">진행예정 <span class="tab-cnt" id="cntPlanned">0</span></div>
+  <div class="tab" id="tabReview"     onclick="switchTab('review')">검토요청 <span class="tab-cnt" id="cntReview">0</span></div>
+  <div class="tab" id="tabDone"       onclick="switchTab('done')">완료 <span class="tab-cnt" id="cntDone">0</span></div>
+  <div class="tab" id="tabAll"        onclick="switchTab('all')">전체 <span class="tab-cnt" id="cntAll">0</span></div>
+  <div class="tab" id="tabWeekly"     onclick="switchTab('weekly')">주간 요약</div>
+  <div class="tab" id="tabMemo"       onclick="switchTab('memo')">메모</div>
+  <div class="tab-right-actions">
+    <span id="syncStatus" style="font-size:11px;color:#aaa;margin-right:4px;"></span>
+    <button class="btn btn-ghost" style="font-size:11px;height:26px;padding:0 10px;display:inline-flex;align-items:center;" onclick="exportData()">내보내기</button>
+    <label style="font-size:11px;height:26px;padding:0 10px;cursor:pointer;display:inline-flex;align-items:center;border:1px solid #e0e0e0;border-radius:6px;background:#fff;color:#555;font-weight:500;">가져오기<input type="file" accept=".json" style="display:none" onchange="importData(event)"></label>
+  </div>
+</div>
+
+<div class="content">
+  <div id="mainView"></div>
+  <div id="weeklyView" style="display:none;"></div>
+</div>
+
+<!-- Memo full view -->
+<div id="memoView">
+  <div class="memo-topbar">
+    <button class="memo-btn" onmousedown="event.preventDefault();execMemoFmt('bold')" title="굵게">
+      <svg width="13" height="14" viewBox="0 0 13 14" fill="none"><text x="1" y="12" font-family="serif" font-size="13" font-weight="800" fill="#555">B</text></svg>
+    </button>
+    <button class="memo-btn" onmousedown="event.preventDefault();execMemoFmt('italic')" title="기울임">
+      <svg width="10" height="14" viewBox="0 0 10 14" fill="none"><text x="2" y="12" font-family="serif" font-size="13" font-style="italic" fill="#555">I</text></svg>
+    </button>
+    <button class="memo-btn" onmousedown="event.preventDefault();execMemoFmt('underline')" title="밑줄">
+      <svg width="13" height="15" viewBox="0 0 13 15"><text x="1" y="11" font-family="sans-serif" font-size="12" text-decoration="underline" fill="#555">U</text><line x1="1" y1="14" x2="12" y2="14" stroke="#555" stroke-width="1.5"/></svg>
+    </button>
+    <button class="memo-btn" onmousedown="event.preventDefault();execMemoFmt('strikeThrough')" title="취소선">
+      <svg width="13" height="14" viewBox="0 0 13 14"><text x="1" y="12" font-family="sans-serif" font-size="12" fill="#555">S</text><line x1="0" y1="7" x2="13" y2="7" stroke="#555" stroke-width="1.5"/></svg>
+    </button>
+    <div class="memo-sep" style="height:18px;"></div>
+    <button class="memo-btn" onmousedown="event.preventDefault();execMemoFmt('insertUnorderedList')" title="글머리 목록">
+      <svg width="18" height="14" viewBox="0 0 18 14" fill="none">
+        <circle cx="2" cy="3" r="1.5" fill="#555"/><line x1="6" y1="3" x2="17" y2="3" stroke="#555" stroke-width="1.5" stroke-linecap="round"/>
+        <circle cx="2" cy="7.5" r="1.5" fill="#555"/><line x1="6" y1="7.5" x2="17" y2="7.5" stroke="#555" stroke-width="1.5" stroke-linecap="round"/>
+        <circle cx="2" cy="12" r="1.5" fill="#555"/><line x1="6" y1="12" x2="17" y2="12" stroke="#555" stroke-width="1.5" stroke-linecap="round"/>
+      </svg>
+    </button>
+    <button class="memo-btn" onmousedown="event.preventDefault();execMemoFmt('insertOrderedList')" title="숫자 목록">
+      <svg width="18" height="14" viewBox="0 0 18 14" fill="none">
+        <text x="0" y="5" font-family="sans-serif" font-size="5.5" fill="#555">1</text><line x1="6" y1="3" x2="17" y2="3" stroke="#555" stroke-width="1.5" stroke-linecap="round"/>
+        <text x="0" y="9.5" font-family="sans-serif" font-size="5.5" fill="#555">2</text><line x1="6" y1="7.5" x2="17" y2="7.5" stroke="#555" stroke-width="1.5" stroke-linecap="round"/>
+        <text x="0" y="14" font-family="sans-serif" font-size="5.5" fill="#555">3</text><line x1="6" y1="12" x2="17" y2="12" stroke="#555" stroke-width="1.5" stroke-linecap="round"/>
+      </svg>
+    </button>
+    <div class="memo-sep" style="height:18px;"></div>
+    <button class="memo-btn memo-btn-text" onmousedown="event.preventDefault();execMemoFmt('removeFormat')" style="font-size:11px;color:#bbb">T×</button>
+    <div class="memo-topbar-spacer"></div>
+    <span class="memo-save-indicator" id="memoSaveIndicator"></span>
+    <button class="btn btn-primary" style="height:28px;font-size:12px;padding:0 12px;" onclick="saveMemo()">저장</button>
+  </div>
+  <div class="memo-full-editor" id="fullMemo" contenteditable="true"></div>
+</div>
+
+<!-- Detail panel -->
+<div class="detail-backdrop" id="detailBackdrop" onclick="closeDetail()"></div>
+<div class="detail-panel" id="detailPanel">
+  <div class="detail-topbar">
+    <span id="detailTopLabel">새 작업</span>
+    <button class="detail-close" onclick="closeDetail()">✕</button>
+  </div>
+  <div class="detail-scroll">
+
+    <div class="field-row">
+      <textarea class="field-input field-title" id="dTitle" rows="1" placeholder="작업명" oninput="autoResize(this)"></textarea>
+    </div>
+
+    <div class="field-row">
+      <div class="field-label-row"><div class="field-label">상태</div></div>
+      <select class="field-select" id="dStatus" onchange="onDetailStatusChange()">
+        <option value="planned">진행예정</option>
+        <option value="inprogress">진행중</option>
+        <option value="review">검토요청</option>
+        <option value="done">완료</option>
+      </select>
+    </div>
+
+    <div class="field-row">
+      <div class="field-label-row"><div class="field-label">프로젝트</div></div>
+      <div class="project-wrap">
+        <input class="field-input" id="dProject" type="text" placeholder="프로젝트명"
+          autocomplete="off" oninput="showDetailProjSugg()" onfocus="showDetailProjSugg()">
+        <div class="proj-dropdown" id="detailProjDropdown"></div>
+      </div>
+    </div>
+
+    <div class="field-row">
+      <div class="field-label-row">
+        <div class="field-label">시작일</div>
+        <button class="date-clear-btn" onclick="document.getElementById('dStartDate').value=''">삭제</button>
+      </div>
+      <input class="field-date" id="dStartDate" type="date">
+    </div>
+
+    <div class="field-row" id="dCompletedGroup">
+      <div class="field-label-row">
+        <div class="field-label">완료일 <span class="auto-badge">자동입력</span></div>
+        <button class="date-clear-btn" onclick="document.getElementById('dCompletedDate').value=''">삭제</button>
+      </div>
+      <input class="field-date" id="dCompletedDate" type="date">
+    </div>
+
+    <div class="field-row">
+      <div class="field-label-row"><div class="field-label">메모</div></div>
+      <div class="memo-wrap">
+        <div class="memo-toolbar">
+          <!-- Bold -->
+          <button class="memo-btn" onmousedown="event.preventDefault();execFmt('bold')" title="굵게">
+            <svg width="13" height="14" viewBox="0 0 13 14" fill="none"><text x="1" y="12" font-family="serif" font-size="13" font-weight="800" fill="#555">B</text></svg>
+          </button>
+          <!-- Italic -->
+          <button class="memo-btn" onmousedown="event.preventDefault();execFmt('italic')" title="기울임">
+            <svg width="10" height="14" viewBox="0 0 10 14" fill="none"><text x="2" y="12" font-family="serif" font-size="13" font-style="italic" fill="#555">I</text></svg>
+          </button>
+          <!-- Underline -->
+          <button class="memo-btn" onmousedown="event.preventDefault();execFmt('underline')" title="밑줄">
+            <svg width="13" height="15" viewBox="0 0 13 15"><text x="1" y="11" font-family="sans-serif" font-size="12" text-decoration="underline" fill="#555">U</text><line x1="1" y1="14" x2="12" y2="14" stroke="#555" stroke-width="1.5"/></svg>
+          </button>
+          <!-- Strikethrough -->
+          <button class="memo-btn" onmousedown="event.preventDefault();execFmt('strikeThrough')" title="취소선">
+            <svg width="13" height="14" viewBox="0 0 13 14"><text x="1" y="12" font-family="sans-serif" font-size="12" fill="#555">S</text><line x1="0" y1="7" x2="13" y2="7" stroke="#555" stroke-width="1.5"/></svg>
+          </button>
+          <div class="memo-sep"></div>
+          <!-- Bullet list -->
+          <button class="memo-btn" onmousedown="event.preventDefault();execFmt('insertUnorderedList')" title="글머리 목록">
+            <svg width="18" height="14" viewBox="0 0 18 14" fill="none">
+              <circle cx="2" cy="3" r="1.5" fill="#555"/>
+              <line x1="6" y1="3" x2="17" y2="3" stroke="#555" stroke-width="1.5" stroke-linecap="round"/>
+              <circle cx="2" cy="7.5" r="1.5" fill="#555"/>
+              <line x1="6" y1="7.5" x2="17" y2="7.5" stroke="#555" stroke-width="1.5" stroke-linecap="round"/>
+              <circle cx="2" cy="12" r="1.5" fill="#555"/>
+              <line x1="6" y1="12" x2="17" y2="12" stroke="#555" stroke-width="1.5" stroke-linecap="round"/>
+            </svg>
+          </button>
+          <!-- Ordered list -->
+          <button class="memo-btn" onmousedown="event.preventDefault();execFmt('insertOrderedList')" title="숫자 목록">
+            <svg width="18" height="14" viewBox="0 0 18 14" fill="none">
+              <text x="0" y="5" font-family="sans-serif" font-size="5.5" fill="#555">1</text>
+              <line x1="6" y1="3" x2="17" y2="3" stroke="#555" stroke-width="1.5" stroke-linecap="round"/>
+              <text x="0" y="9.5" font-family="sans-serif" font-size="5.5" fill="#555">2</text>
+              <line x1="6" y1="7.5" x2="17" y2="7.5" stroke="#555" stroke-width="1.5" stroke-linecap="round"/>
+              <text x="0" y="14" font-family="sans-serif" font-size="5.5" fill="#555">3</text>
+              <line x1="6" y1="12" x2="17" y2="12" stroke="#555" stroke-width="1.5" stroke-linecap="round"/>
+            </svg>
+          </button>
+          <div class="memo-sep"></div>
+          <button class="memo-btn memo-btn-text" onmousedown="event.preventDefault();execFmt('removeFormat')" title="서식 초기화" style="font-size:11px;color:#bbb">T×</button>
+        </div>
+        <div class="memo-editor" id="dMemo" contenteditable="true" data-placeholder="메모를 입력하세요..."></div>
+      </div>
+    </div>
+
+  </div>
+  <!-- Footer: 삭제 LEFT, 저장 RIGHT -->
+  <div class="detail-footer">
+    <button class="btn btn-danger" id="detailDeleteBtn" onclick="deleteDetail()">삭제</button>
+    <button class="btn btn-primary" style="flex:1" onclick="saveDetail()" id="detailSaveBtn">저장</button>
+  </div>
+</div>
+
+<script>
+const STORAGE_KEY = 'task_tracker_v4';
+const PROJECTS_KEY = 'task_tracker_projects_v2';
+const MEMO_KEY = 'task_tracker_memo_v1';
+const SB_URL = 'https://hzesxypetlmleuprhvff.supabase.co';
+const SB_KEY = 'sb_publishable_PSHEky-SFVp7ipA9bj6E5g_UyO4Wb5K';
+let tasks = [], projects = [];
+let detailId = null, currentTab = 'inprogress';
+
+const STATUS_LABEL = { planned:'진행예정', inprogress:'진행중', review:'검토요청', done:'완료' };
+const STATUS_COLOR  = { planned:'#9ca3af', inprogress:'#fbbf24', review:'#c084fc', done:'#4ade80' };
+const DAY_KO = ['일','월','화','수','목','금','토'];
+
+// ── Supabase helpers ──
+function sbHeaders(extra={}) {
+  return { 'apikey': SB_KEY, 'Authorization': `Bearer ${SB_KEY}`, 'Content-Type': 'application/json', ...extra };
+}
+function setSyncStatus(msg, color) {
+  const el = document.getElementById('syncStatus');
+  if (el) { el.textContent = msg; el.style.color = color || '#aaa'; }
+}
+async function syncToSupabase() {
+  setSyncStatus('동기화 중…', '#aaa');
+  try {
+    const body = { id: 1, tasks, projects, memo: localStorage.getItem(MEMO_KEY)||'', updated_at: new Date().toISOString() };
+    const res = await fetch(`${SB_URL}/rest/v1/tracker_data`, {
+      method: 'POST',
+      headers: sbHeaders({ 'Prefer': 'resolution=merge-duplicates' }),
+      body: JSON.stringify(body)
+    });
+    if (!res.ok) throw new Error(await res.text());
+    setSyncStatus('✓ 동기화됨', '#22c55e');
+    setTimeout(() => setSyncStatus('', ''), 2500);
+  } catch(e) {
+    setSyncStatus('⚠ 오프라인', '#f59e0b');
+  }
+}
+async function loadFromSupabase() {
+  setSyncStatus('불러오는 중…', '#aaa');
+  try {
+    const res = await fetch(`${SB_URL}/rest/v1/tracker_data?id=eq.1&select=*`, {
+      headers: sbHeaders()
+    });
+    if (!res.ok) throw new Error(await res.text());
+    const rows = await res.json();
+    if (rows.length > 0) {
+      const row = rows[0];
+      tasks = row.tasks || [];
+      projects = row.projects || [];
+      if (row.memo) localStorage.setItem(MEMO_KEY, row.memo);
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks));
+      localStorage.setItem(PROJECTS_KEY, JSON.stringify(projects));
+    }
+    setSyncStatus('✓ 동기화됨', '#22c55e');
+    setTimeout(() => setSyncStatus('', ''), 2500);
+  } catch(e) {
+    setSyncStatus('⚠ 로컬 데이터', '#f59e0b');
+  }
+}
+
+function load() {
+  ['task_tracker_v1','task_tracker_v2','task_tracker_v3','task_tracker_projects_v1'].forEach(k=>localStorage.removeItem(k));
+  try { tasks = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]'); } catch(e) { tasks=[]; }
+  try { projects = JSON.parse(localStorage.getItem(PROJECTS_KEY) || '[]'); } catch(e) { projects=[]; }
+}
+function save() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks));
+  localStorage.setItem(PROJECTS_KEY, JSON.stringify(projects));
+  syncToSupabase();
+}
+function ensureProject(n) { if (n && !projects.includes(n)) { projects.push(n); save(); } }
+function genId() { return Date.now().toString(36) + Math.random().toString(36).slice(2,6); }
+function localDateStr(d) {
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+function today() { return localDateStr(new Date()); }
+function thisWeekRange() {
+  const now = new Date();
+  const diff = (now.getDay()+6)%7; // days since Monday (KST-safe)
+  const mon = new Date(now); mon.setDate(now.getDate()-diff);
+  const fri = new Date(mon); fri.setDate(mon.getDate()+4);
+  const sun = new Date(mon); sun.setDate(mon.getDate()+6);
+  return { mon: localDateStr(mon), fri: localDateStr(fri), sun: localDateStr(sun) };
+}
+function inRange(d,from,to) { return d && d>=from && d<=to; }
+function diffDays(a,b) { return Math.round((new Date(b+' ')-new Date(a+' '))/86400000); }
+
+// "YYYY.MM.DD 요일" format
+function fmtLong(d) {
+  if (!d) return '';
+  const dt = new Date(d+'T00:00:00');
+  return `${dt.getFullYear()}.${String(dt.getMonth()+1).padStart(2,'0')}.${String(dt.getDate()).padStart(2,'0')} ${DAY_KO[dt.getDay()]}`;
+}
+function fmtShort(d) {
+  if (!d) return '';
+  const dt = new Date(d+'T00:00:00');
+  return `${dt.getMonth()+1}/${dt.getDate()}`;
+}
+
+// Card date string: "YYYY.MM.DD 요일 - YYYY.MM.DD 요일 (N일)" or "YYYY.MM.DD 요일 - (N일)"
+function cardDateStr(t) {
+  if (!t.startDate) return '';
+  const start = fmtLong(t.startDate);
+  // end date: completedDate for done tasks, otherwise no end
+  const endDate = t.status==='done' ? t.completedDate : null;
+  const elapsedEnd = (t.status==='done' && t.completedDate) ? t.completedDate : today();
+  const elapsed = diffDays(t.startDate, elapsedEnd);
+  const elapsedStr = elapsed===0 ? '당일' : elapsed>0 ? `${elapsed}일` : null;
+
+  if (endDate) {
+    return `${start} - ${fmtLong(endDate)}${elapsedStr ? ` (${elapsedStr})` : ''}`;
+  } else {
+    return `${start} -${elapsedStr ? `  (${elapsedStr})` : ''}`;
+  }
+}
+
+function autoResize(el) { el.style.height='auto'; el.style.height=el.scrollHeight+'px'; }
+function allProjects() {
+  return [...new Set([...projects,...tasks.map(t=>t.project).filter(Boolean)])].sort((a,b)=>a.localeCompare(b,'ko'));
+}
+
+// --- Filter ---
+function filtered() {
+  const s = document.getElementById('searchInput').value.toLowerCase();
+  const p = document.getElementById('projectFilter').value;
+  return tasks.filter(t => {
+    if (s && !t.title.toLowerCase().includes(s) && !(t.memo||'').toLowerCase().includes(s) && !(t.project||'').toLowerCase().includes(s)) return false;
+    if (p && t.project !== p) return false;
+    if (currentTab==='inprogress') return t.status==='inprogress';
+    if (currentTab==='planned')    return t.status==='planned';
+    if (currentTab==='review')     return t.status==='review';
+    if (currentTab==='done')       return t.status==='done';
+    return true;
+  });
+}
+
+function syncProjectFilter() {
+  const sel=document.getElementById('projectFilter'), cur=sel.value;
+  sel.innerHTML='<option value="">전체 프로젝트</option>'+allProjects().map(p=>`<option value="${p}">${p}</option>`).join('');
+  if (cur) sel.value=cur;
+}
+
+function syncTabCounts() {
+  const c = s => tasks.filter(t=>t.status===s).length;
+  document.getElementById('cntInprogress').textContent = c('inprogress');
+  document.getElementById('cntPlanned').textContent    = c('planned');
+  document.getElementById('cntReview').textContent     = c('review');
+  document.getElementById('cntDone').textContent       = c('done');
+  document.getElementById('cntAll').textContent        = tasks.length;
+}
+
+// --- Render ---
+function render() {
+  syncProjectFilter(); syncTabCounts();
+  if (currentTab==='weekly') {
+    document.getElementById('mainView').style.display='none';
+    document.getElementById('weeklyView').style.display='';
+    renderWeekly();
+  } else {
+    document.getElementById('mainView').style.display='';
+    document.getElementById('weeklyView').style.display='none';
+    renderMain();
+  }
+}
+
+function renderMain() {
+  const list = filtered();
+  const el = document.getElementById('mainView');
+  if (!list.length) { el.innerHTML='<div class="empty">작업이 없습니다.</div>'; return; }
+  const grouped = {};
+  list.forEach(t => { const k=t.project||'프로젝트 없음'; (grouped[k]=grouped[k]||[]).push(t); });
+  const keys = Object.keys(grouped).sort((a,b)=>a==='프로젝트 없음'?1:b==='프로젝트 없음'?-1:a.localeCompare(b,'ko'));
+  const STATUS_SORT = { inprogress:0, planned:1, review:2, done:3 };
+  el.innerHTML = keys.map(k => {
+    const items = grouped[k].sort((a,b) => {
+      // 1. 상태 순서
+      const sd = (STATUS_SORT[a.status]??9)-(STATUS_SORT[b.status]??9);
+      if (sd!==0) return sd;
+      // 2. 날짜 없는 것을 상태값 최상단으로
+      const aD=!!a.startDate, bD=!!b.startDate;
+      if (!aD && bD) return -1;
+      if (aD && !bD) return 1;
+      if (!aD && !bD) return 0;
+      // 3. 시작일 내림차순 (최신→상단)
+      const startD = (b.startDate||'').localeCompare(a.startDate||'');
+      if (startD!==0) return startD;
+      // 4. 시작일 같으면 완료일 내림차순
+      return (b.completedDate||'').localeCompare(a.completedDate||'');
+    });
+    return `<div class="group-block">
+      <div class="group-header"><div class="group-dot"></div><div class="group-title">${k}</div><div class="group-count">${items.length}건</div></div>
+      ${items.map(cardHtml).join('')}
+    </div>`;
+  }).join('');
+}
+
+function cardHtml(t) {
+  const pill = `<span class="status-pill ${t.status}">${STATUS_LABEL[t.status]||t.status}</span>`;
+  const dateStr = cardDateStr(t);
+  const datePart = dateStr ? `<span class="task-date-inline">${dateStr}</span>` : '';
+  return `<div class="task-card ${t.status==='done'?'done':''}" onclick="openDetail('${t.id}')">
+    <div class="card-status-dot"><div class="sdot ${t.status}" title="${STATUS_LABEL[t.status]||''}" onclick="event.stopPropagation();cycleStatus('${t.id}')"></div></div>
+    <div class="task-body">
+      <div class="task-title">${t.title}</div>
+      <div class="task-meta">${pill}${datePart}</div>
+    </div>
+  </div>`;
+}
+
+// --- Weekly ---
+function renderWeekly() {
+  const { mon, fri, sun } = thisWeekRange();
+  const el = document.getElementById('weeklyView');
+  const completed    = tasks.filter(t=>t.status==='done' && inRange(t.completedDate,mon,sun)).sort((a,b)=>(b.completedDate||'').localeCompare(a.completedDate||''));
+  const inprogress   = tasks.filter(t=>t.status==='inprogress').sort((a,b)=>(b.startDate||'').localeCompare(a.startDate||''));
+  const planned      = tasks.filter(t=>t.status==='planned').sort((a,b)=>(a.startDate||'').localeCompare(b.startDate||''));
+
+  function wItem(t) {
+    const dot=`<div class="wi-dot" style="background:${STATUS_COLOR[t.status]||'#ccc'}"></div>`;
+    const dateStr=cardDateStr(t);
+    const datePart=dateStr?` <span class="wi-date">(${dateStr})</span>`:'';
+    const projPart=t.project?`<span class="wi-proj">${t.project}</span>`:'';
+    return `<div class="weekly-item" onclick="openDetail('${t.id}')">${dot}<div class="wi-body"><span class="wi-title">${t.title}</span>${datePart}${projPart}</div></div>`;
+  }
+  el.innerHTML=`
+    <div class="weekly-section"><h3>✅ 금주 완료된 업무 <span class="wk-count">${fmtShort(mon)} – ${fmtShort(fri)} · ${completed.length}건</span></h3>${completed.length?completed.map(wItem).join(''):'<div class="empty-weekly">이번 주 완료된 작업이 없습니다.</div>'}</div>
+    <div class="weekly-section"><h3>🔄 진행중 업무 <span class="wk-count">${inprogress.length}건</span></h3>${inprogress.length?inprogress.map(wItem).join(''):'<div class="empty-weekly">진행중인 작업이 없습니다.</div>'}</div>
+    <div class="weekly-section"><h3>📋 진행 예정 업무 <span class="wk-count">${planned.length}건</span></h3>${planned.length?planned.map(wItem).join(''):'<div class="empty-weekly">진행 예정 업무가 없습니다.</div>'}</div>`;
+}
+
+function switchTab(tab) {
+  currentTab = tab;
+  ['inprogress','planned','review','done','all','weekly','memo'].forEach(t=>{
+    const el=document.getElementById('tab'+t[0].toUpperCase()+t.slice(1));
+    if(el) el.classList.toggle('active',t===tab);
+  });
+  const isMemo = tab==='memo';
+  document.getElementById('mainView').style.display = isMemo ? 'none' : '';
+  document.getElementById('weeklyView').style.display = 'none';
+  document.getElementById('memoView').classList.toggle('active', isMemo);
+  document.querySelector('.content').style.display = isMemo ? 'none' : '';
+  if (isMemo) { loadMemoEditor(); return; }
+  render();
+}
+
+// --- Memo tab ---
+function loadMemoEditor() {
+  const html = localStorage.getItem(MEMO_KEY) || '';
+  document.getElementById('fullMemo').innerHTML = html;
+}
+function saveMemo() {
+  const html = document.getElementById('fullMemo').innerHTML;
+  localStorage.setItem(MEMO_KEY, html);
+  syncToSupabase();
+  const ind = document.getElementById('memoSaveIndicator');
+  ind.textContent = '저장됨 ✓'; ind.style.color = '#22c55e';
+  setTimeout(()=>{ ind.textContent=''; }, 2000);
+}
+function execMemoFmt(cmd) { document.execCommand(cmd, false, null); document.getElementById('fullMemo').focus(); }
+
+// Tab key in full memo editor
+document.addEventListener('keydown', e => {
+  if (e.key==='Tab' && document.activeElement===document.getElementById('fullMemo')) {
+    e.preventDefault();
+    document.execCommand('insertHTML', false, '&nbsp;&nbsp;&nbsp;&nbsp;');
+  }
+});
+
+// --- Export / Import ---
+function exportData() {
+  const data = { version: 1, exportedAt: today(), tasks, projects, memo: localStorage.getItem(MEMO_KEY)||'' };
+  const blob = new Blob([JSON.stringify(data, null, 2)], {type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `task-tracker-${today()}.json`;
+  a.click(); URL.revokeObjectURL(a.href);
+}
+function importData(e) {
+  const file = e.target.files[0]; if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    try {
+      const data = JSON.parse(ev.target.result);
+      if (!Array.isArray(data.tasks)) { alert('올바른 파일이 아닙니다.'); return; }
+      if (!confirm(`${data.tasks.length}개 작업을 가져옵니다.\n현재 데이터는 덮어씁니다. 계속할까요?`)) return;
+      tasks = data.tasks; projects = data.projects || [];
+      if (data.memo) localStorage.setItem(MEMO_KEY, data.memo);
+      save(); render(); alert('가져오기 완료!');
+    } catch(err) { alert('파일을 읽을 수 없습니다.'); }
+  };
+  reader.readAsText(file);
+  e.target.value = '';
+}
+
+// --- Cycle status ---
+const STATUS_ORDER=['inprogress','planned','review','done'];
+function cycleStatus(id) {
+  const t=tasks.find(t=>t.id===id); if(!t) return;
+  const idx=STATUS_ORDER.indexOf(t.status);
+  t.status=STATUS_ORDER[(idx+1)%STATUS_ORDER.length];
+  if(t.status==='done'&&!t.completedDate) t.completedDate=today();
+  if(t.status!=='done') t.completedDate=null;
+  save(); render();
+  if(detailId===id) fillDetail(id);
+}
+
+// --- Detail panel ---
+function openAddModal() {
+  detailId=null;
+  const ta=document.getElementById('dTitle'); ta.value=''; autoResize(ta);
+  document.getElementById('dStatus').value='planned';
+  document.getElementById('dProject').value='';
+  document.getElementById('dStartDate').value=today();
+  document.getElementById('dCompletedDate').value='';
+  document.getElementById('dMemo').innerHTML='';
+  toggleDetailCompletedField('planned');
+  document.getElementById('detailTopLabel').textContent='새 작업';
+  document.getElementById('detailDeleteBtn').style.display='none';
+  document.getElementById('detailBackdrop').classList.add('open');
+  document.getElementById('detailPanel').classList.add('open');
+  setTimeout(()=>document.getElementById('dTitle').focus(),50);
+}
+function openDetail(id) {
+  detailId=id; fillDetail(id);
+  document.getElementById('detailTopLabel').textContent='작업 상세';
+  document.getElementById('detailDeleteBtn').style.display='';
+  document.getElementById('detailBackdrop').classList.add('open');
+  document.getElementById('detailPanel').classList.add('open');
+}
+function fillDetail(id) {
+  const t=tasks.find(t=>t.id===id); if(!t) return;
+  const ta=document.getElementById('dTitle'); ta.value=t.title; autoResize(ta);
+  document.getElementById('dStatus').value=t.status;
+  document.getElementById('dProject').value=t.project||'';
+  document.getElementById('dStartDate').value=t.startDate||'';
+  document.getElementById('dCompletedDate').value=t.completedDate||'';
+  document.getElementById('dMemo').innerHTML=t.memoHtml||(t.memo?t.memo.replace(/\n/g,'<br>'):'');
+  toggleDetailCompletedField(t.status);
+}
+function toggleDetailCompletedField(status) {
+  document.getElementById('dCompletedGroup').style.display=status==='done'?'':'none';
+}
+function onDetailStatusChange() {
+  const s=document.getElementById('dStatus').value;
+  toggleDetailCompletedField(s);
+  if(s==='done'&&!document.getElementById('dCompletedDate').value) document.getElementById('dCompletedDate').value=today();
+}
+function saveDetail() {
+  const title=document.getElementById('dTitle').value.trim();
+  if(!title){alert('작업명을 입력하세요');return;}
+  const project=document.getElementById('dProject').value.trim();
+  const status=document.getElementById('dStatus').value;
+  // 완료일: 수동 입력값 우선, 미입력 시만 자동입력
+  const manualCompleted = document.getElementById('dCompletedDate').value;
+  const completedDate = status==='done' ? (manualCompleted || today()) : null;
+  const m=document.getElementById('dMemo');
+  if(detailId) {
+    const t=tasks.find(t=>t.id===detailId); if(!t) return;
+    t.title=title; t.project=project;
+    t.startDate=document.getElementById('dStartDate').value;
+    t.status=status; t.completedDate=completedDate;
+    t.memoHtml=m.innerHTML; t.memo=m.innerText;
+  } else {
+    const nt={id:genId(),title,project,startDate:document.getElementById('dStartDate').value,status,completedDate,memoHtml:m.innerHTML,memo:m.innerText,createdAt:today()};
+    tasks.push(nt); detailId=nt.id;
+  }
+  if(project) ensureProject(project);
+  save(); render(); closeDetail();
+}
+function deleteDetail() {
+  if(!detailId||!confirm('이 작업을 삭제할까요?')) return;
+  tasks=tasks.filter(t=>t.id!==detailId);
+  save(); render(); closeDetail();
+}
+function closeDetail() {
+  document.getElementById('detailBackdrop').classList.remove('open');
+  document.getElementById('detailPanel').classList.remove('open');
+  detailId=null;
+}
+
+// --- Project autocomplete ---
+function showDetailProjSugg() {
+  const val=document.getElementById('dProject').value.toLowerCase();
+  const matches=allProjects().filter(p=>!val||p.toLowerCase().includes(val));
+  const el=document.getElementById('detailProjDropdown');
+  if(!matches.length){el.classList.remove('show');return;}
+  el.innerHTML=matches.map(p=>`<div class="proj-option" onmousedown="event.preventDefault();selectDetailProj('${p}')">${p}</div>`).join('');
+  el.classList.add('show');
+}
+function selectDetailProj(n){document.getElementById('dProject').value=n;document.getElementById('detailProjDropdown').classList.remove('show');}
+
+// --- Memo ---
+function execFmt(cmd){document.execCommand(cmd,false,null);document.getElementById('dMemo').focus();}
+
+// Tab key → indent in memo editor
+document.addEventListener('keydown',e=>{
+  if(e.key==='Tab' && document.activeElement===document.getElementById('dMemo')) {
+    e.preventDefault();
+    document.execCommand('insertHTML',false,'&nbsp;&nbsp;&nbsp;&nbsp;');
+  }
+  if(e.key==='Escape') closeDetail();
+});
+
+document.addEventListener('click',e=>{
+  if(!e.target.closest('.project-wrap')) document.getElementById('detailProjDropdown').classList.remove('show');
+});
+['searchInput','projectFilter'].forEach(id=>document.getElementById(id).addEventListener('input',render));
+
+load(); render(); // 로컬 캐시로 즉시 표시
+loadFromSupabase().then(() => render()); // Supabase에서 최신 데이터로 갱신
+// Supabase 프로젝트 일시정지 방지 (6일마다 ping)
+setInterval(() => {
+  fetch(`${SB_URL}/rest/v1/tracker_data?id=eq.1&select=id`, { headers: sbHeaders() }).catch(()=>{});
+}, 6*24*60*60*1000);
+</script>
+</body>
+</html>
